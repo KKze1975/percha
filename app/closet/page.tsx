@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { colorToHex } from "@/lib/colorMap";
+import { compressImage } from "@/lib/compressImage";
 import type { ClosetItem } from "@/types/closet";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -19,6 +20,7 @@ export default function ClosetPage() {
   const [items, setItems] = useState<ClosetItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [prettifying, setPrettifying] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadItems = () => {
@@ -51,12 +53,25 @@ export default function ClosetPage() {
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploading(true);
-    const formData = new FormData();
-    for (const file of Array.from(files)) formData.append("files", file);
+    setUploadError(null);
 
     try {
-      await fetch("/api/closet/upload", { method: "POST", body: formData });
+      const compressed = await Promise.all(Array.from(files).map(compressImage));
+      const formData = new FormData();
+      for (const file of compressed) formData.append("files", file);
+
+      const res = await fetch("/api/closet/upload", { method: "POST", body: formData });
+      if (!res.ok) {
+        setUploadError(
+          res.status === 413
+            ? "Las fotos son muy grandes. Intenta con menos fotos a la vez."
+            : `No se pudo subir (error ${res.status}).`,
+        );
+        return;
+      }
       loadItems();
+    } catch {
+      setUploadError("No se pudo subir. Revisa tu conexion e intenta de nuevo.");
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -93,6 +108,7 @@ export default function ClosetPage() {
       </div>
 
       {uploading && <p className="text-xs text-muted">Subiendo...</p>}
+      {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
 
       {items.length > 0 ? (
         <div className="grid grid-cols-2 gap-2.5">
