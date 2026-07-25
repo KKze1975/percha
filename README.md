@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Percha
 
-## Getting Started
+Clon funcional de Alta como ejercicio de clonación técnica (Next.js/Vercel, stack alineado a Flujo). Ver `PRD.md` para la especificación completa y `GOAL-PROMPT.md` para la metodología de construcción por fases.
 
-First, run the development server:
+## Stack
+
+- Next.js (App Router) + TypeScript, desplegado en Vercel
+- DynamoDB (`ClosetItems`) para el inventario del clóset
+- Google Drive (delegado vía OAuth a una cuenta real — las cuentas de servicio no tienen cuota de almacenamiento en Drive personal) para las fotos
+- API de Claude (Anthropic) para categorización y generación de outfits
+
+## Desarrollo local
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Copia `.env.local.example` a `.env.local` y completa las variables. Las credenciales de Drive (`DRIVE_OAUTH_*` y `DRIVE_FOLDER_ID`) se obtienen corriendo una vez:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+node scripts/drive-oauth-setup.mjs
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tests
 
-## Learn More
+```bash
+npm run typecheck   # tsc --noEmit
+npm test            # vitest run
+```
 
-To learn more about Next.js, take a look at the following resources:
+Los tests de integración (`tests/*.integration.test.ts`, `tests/persistence.dynamodb.test.ts`, `tests/outfit.statistical.test.ts`) corren contra DynamoDB, Drive y Claude reales — no hay mocks permanentes. Se saltan automáticamente si falta alguna variable de entorno requerida.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+vercel deploy         # preview
+vercel deploy --prod  # producción
+```
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+El repo está conectado al proyecto de Vercel: los pushes a `master` y los PRs disparan deploys automáticamente.
