@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getClosetItems, incrementUses } from "@/lib/dynamodb";
+import { getClosetItems, incrementUses, putOutfitLogEntry } from "@/lib/dynamodb";
 import type { ClosetItem, ClosetWarmth } from "@/types/closet";
 
 export interface OutfitRequest {
@@ -69,23 +69,41 @@ function parseResponse(text: string, items: ClosetItem[]): OutfitResult | null {
   }
 }
 
-// Deterministic safety net if Claude's response is missing/malformed: pick the
-// lowest-`uses` item per category that is weather-appropriate. Keeps the
-// ranking-by-uses mechanism intact even when the LLM call fails outright.
-function fallbackOutfit(items: ClosetItem[], request: OutfitRequest): OutfitResult {
-  const suitable = items.filter((i) => i.warmth === request.weather && i.category !== "review");
+// Deterministic ranking mechanism shared by the daily generator's fallback
+// path and the trip packing planner: pick the lowest-`uses` item per category
+// that is weather-appropriate. `excludeItemIds` lets a caller building
+// multiple combos in sequence (e.g. one per trip day) avoid repeating the
+// same item — falling back to reuse only once a category has no unexcluded
+// candidate left, rather than leaving that category empty.
+export function pickLowestUseCombo(
+  items: ClosetItem[],
+  weather: ClosetWarmth,
+  excludeItemIds: Set<string> = new Set(),
+): ClosetItem[] {
+  const suitable = items.filter((i) => i.warmth === weather && i.category !== "review");
   const pool = suitable.length > 0 ? suitable : items.filter((i) => i.category !== "review");
 
-  const byCategory = new Map<string, ClosetItem>();
+  const byCategory = new Map<string, ClosetItem[]>();
   for (const item of pool) {
-    const current = byCategory.get(item.category);
-    if (!current || item.uses < current.uses) {
-      byCategory.set(item.category, item);
-    }
+    const group = byCategory.get(item.category) ?? [];
+    group.push(item);
+    byCategory.set(item.category, group);
   }
 
+  const chosen: ClosetItem[] = [];
+  for (const group of byCategory.values()) {
+    const available = group.filter((i) => !excludeItemIds.has(i.itemId));
+    const candidates = available.length > 0 ? available : group;
+    chosen.push([...candidates].sort((a, b) => a.uses - b.uses)[0]);
+  }
+  return chosen;
+}
+
+// Deterministic safety net if Claude's response is missing/malformed. Keeps
+// the ranking-by-uses mechanism intact even when the LLM call fails outright.
+function fallbackOutfit(items: ClosetItem[], request: OutfitRequest): OutfitResult {
   return {
-    items: [...byCategory.values()],
+    items: pickLowestUseCombo(items, request.weather),
     reason: "Combinacion generada automaticamente priorizando prendas con menos uso.",
   };
 }
@@ -122,6 +140,24 @@ export async function generateOutfit(
   }
 }
 
-export async function confirmOutfit(userId: string, itemIds: string[]): Promise<void> {
-  await Promise.all(itemIds.map((itemId) => incrementUses(userId, itemId)));
+// The uses-per-item counter (`ADD uses :incr`) is the core mechanism the
+// ranking depends on and must succeed for confirmOutfit to succeed. The
+// OutfitLog write is an additional view of the same event, not something
+// the ranking mechanism depends on — a transient failure there (or the
+// table not existing yet) must not block or fail the counter increments.
+export async function confirmOutfit(
+  userId: string,
+  itemIds: string[],
+  date: string = new Date().toISOString().slice(0, 10),
+): Promise<void> {
+  const [logResult] = await Promise.all([
+    putOutfitLogEntry(userId, date, itemIds).then(
+      () => null,
+      (error: unknown) => error,
+    ),
+    ...itemIds.map((itemId) => incrementUses(userId, itemId)),
+  ]);
+  if (logResult) {
+    console.error("confirmOutfit: fallo al escribir en OutfitLog", logResult);
+  }
 }

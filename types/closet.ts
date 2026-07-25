@@ -19,6 +19,7 @@ export interface ClosetItem {
   driveFileId: string;
   createdAt: string;
   needsReview?: boolean;
+  price?: number;
 }
 
 export type NewClosetItem = Omit<ClosetItem, "uses" | "createdAt"> & {
