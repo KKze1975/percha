@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.24",
+    "@ai-sdk/google-vertex": "^5.0.30",
     "@anthropic-ai/sdk": "^0.115.0",
     "@aws-sdk/client-dynamodb": "^3.1095.0",
     "@aws-sdk/lib-dynamodb": "^3.1095.0",
