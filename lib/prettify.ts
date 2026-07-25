@@ -1,6 +1,6 @@
 import { generateText, type LanguageModel } from "ai";
 import { google } from "@ai-sdk/google";
-import { googleVertex } from "@ai-sdk/google-vertex";
+import { googleVertex, createGoogleVertex } from "@ai-sdk/google-vertex";
 
 // ClosetItem doesn't persist a mime type (only used transiently at upload),
 // so it's sniffed from the downloaded bytes instead of adding a new field --
@@ -23,13 +23,17 @@ export function sniffMimeType(buffer: Buffer): string {
 // part, and the edited image comes back through result.files, not
 // generateImage().
 //
-// Three transports, chosen at call time by which credential is present, in
+// Four transports, chosen at call time by which credential is present, in
 // priority order:
-// 1. Vertex AI (GOOGLE_VERTEX_PROJECT set) -- billed against existing GCP
-//    credits, no new spend, the preferred path once configured.
-// 2. Google AI Studio direct (GOOGLE_GENERATIVE_AI_API_KEY set) -- free
+// 1. Vertex AI Express Mode (GOOGLE_VERTEX_API_KEY set) -- a single API key,
+//    still billed against existing GCP credits, no service-account file or
+//    project/location config needed. The simplest GCP-credits path.
+// 2. Vertex AI full mode (GOOGLE_VERTEX_PROJECT set) -- service-account
+//    credentials via GOOGLE_APPLICATION_CREDENTIALS, same billing as
+//    Express Mode, used if Express Mode wasn't set up instead.
+// 3. Google AI Studio direct (GOOGLE_GENERATIVE_AI_API_KEY set) -- free
 //    tier, no card, used for initial validation before GCP was wired up.
-// 3. Vercel AI Gateway (default) -- the original provider decision, once
+// 4. Vercel AI Gateway (default) -- the original provider decision, once
 //    billing is set up there.
 // "gemini-2.5-flash-image" is the version confirmed supported on both
 // Vertex and Google AI Studio direct per each provider's own SDK docs;
@@ -46,6 +50,9 @@ const PROMPT =
 // provider's model type -- without it, tsc blows its heap on
 // @ai-sdk/google-vertex's type surface.
 function selectModel(): LanguageModel {
+  if (process.env.GOOGLE_VERTEX_API_KEY) {
+    return createGoogleVertex({ apiKey: process.env.GOOGLE_VERTEX_API_KEY })(GOOGLE_MODEL);
+  }
   if (process.env.GOOGLE_VERTEX_PROJECT) return googleVertex(GOOGLE_MODEL);
   if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) return google(GOOGLE_MODEL);
   return GATEWAY_MODEL;

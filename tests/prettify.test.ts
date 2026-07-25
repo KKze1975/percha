@@ -1,12 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { enhancePhoto, sniffMimeType } from "@/lib/prettify";
 
-// Any of the three credentials unlocks the real call: GOOGLE_VERTEX_PROJECT
-// (GCP credits), GOOGLE_GENERATIVE_AI_API_KEY (free Google AI Studio tier),
-// or AI_GATEWAY_API_KEY (Vercel Gateway, requires billing) -- lib/prettify.ts
-// picks whichever is set, in that priority order.
+// Any of the four credentials unlocks the real call: GOOGLE_VERTEX_API_KEY
+// (Vertex Express Mode, GCP credits), GOOGLE_VERTEX_PROJECT (Vertex full
+// mode, GCP credits), GOOGLE_GENERATIVE_AI_API_KEY (free Google AI Studio
+// tier), or AI_GATEWAY_API_KEY (Vercel Gateway, requires billing) --
+// lib/prettify.ts picks whichever is set, in that priority order.
 const infraReady = Boolean(
-  process.env.GOOGLE_VERTEX_PROJECT || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.AI_GATEWAY_API_KEY,
+  process.env.GOOGLE_VERTEX_API_KEY ||
+    process.env.GOOGLE_VERTEX_PROJECT ||
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+    process.env.AI_GATEWAY_API_KEY,
 );
 
 // A minimal valid 1x1 PNG, used only to exercise the real call -- content
